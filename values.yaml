@@ -1,11 +1,22 @@
-replicaCount: 1
+nginx:
+  replicaCount: 1
+  image:
+    repository: nginx
+    tag: "1.27-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    type: NodePort
+    port: 80
+    targetPort: 80
+    nodePort: 30000
 
-image:
-  repository: nginx
-  tag: "1.27-alpine"
-  pullPolicy: IfNotPresent
-
-service:
-  type: NodePort
-  port: 80
-  nodePort: 30000
+postgres:
+  replicaCount: 1
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5432
+    targetPort: 5432
