@@ -1,11 +1,24 @@
 # POC ArgoCD + Vault (self-hosted)
 
-## Partie 1 — L'app de test
+Problème : en GitOps, les secrets ne doivent jamais être commit.
+Solution testée : Vault self-hosted + Vault Secrets Operator (VSO),
+auth Kubernetes, injection au déploiement.
+
+## Architecture
+[schéma ou 3 lignes]
+
+## Résultat
+Chart Helm nginx + postgres déployé via ArgoCD, secrets récupérés
+depuis le moteur KV v2 sans jamais transiter par Git.
+
+## Reproduire : 
+
+### Partie 1 — L'app de test
 
 → Créer un chart Helm à deux composants (nginx + postgres), sans aucun secret dedans
 → Le connecter à ArgoCD (créer l'Application qui pointe sur le repo)
 
-## Partie 2 — Vault
+### Partie 2 — Vault
 
 → Installer Vault en self-hosted sur la VM
 → Pousser les secrets dans le moteur KV v2
@@ -14,7 +27,7 @@
 → Déclarer VaultAuth + un VaultStaticSecret par composant
 → Tester le cycle complet
 
-## Pourquoi ce POC
+### Pourquoi ce POC
 
 ArgoCD nous renvoyait le `values.yaml` en clair qui était stocké dans ArgoCD, ce qui n'était pas bon — surtout si quelqu'un se faisait compromettre son compte, il pouvait voir tous nos credentials.
 
@@ -49,7 +62,7 @@ Il n'y a pas de "moment Helm" où Vault interviendrait. Le pod démarre et monte
 
 C'est ce découplage qui fait la force du pattern — et son unique point dur : si le `Secret` n'existe pas encore et que Vault est indisponible, le pod ne démarre pas.
 
-## L'architecture du POC
+### L'architecture du POC
 
 Deux composants, pour démontrer le dispatch multi-app :
 
@@ -64,7 +77,7 @@ Le mot de passe Postgres n'est écrit **qu'une fois** dans Vault. Il sert à la 
 
 Le lien entre les deux mondes tient à une seule chose : **le nom du Secret Kubernetes**, fixé des deux côtés (`destination.name` dans le CR VSO, `secretRef` dans le chart). Rien d'autre ne les connecte.
 
-## Contexte de la VM
+### Contexte de la VM
 
 | | |
 |---|---|
@@ -76,22 +89,22 @@ Le lien entre les deux mondes tient à une seule chose : **le nom du Secret Kube
 
 **Dimensionnement** : prévoir au moins 20 Go de disque. Un nœud K8s + ArgoCD + Vault + les images (~3 Go de containerd) passe difficilement sous 15 Go, et un `DiskPressure` évince les pods en cascade sans rapport avec Vault.
 
-## Création d'une GitHub App
+### Création d'une GitHub App
 
 → GitHub → ton profil → Settings → Developer settings → GitHub Apps → New GitHub App
 
 Une fois cela fait, on peut voir que nous avons notre App ID : c'est la 1ère valeur.
 Il ne faut pas générer de client secret, ça sert à l'OAuth, pas pour ArgoCD. Ce qu'il nous faut, c'est une private key en .pem.
 
-### → Générer la private key
+#### → Générer la private key
 
 Descends sur cette page General, plus bas que "Client secrets", tu vas trouver une section Private keys → clique Generate a private key. Ça télécharge un fichier .pem. C'est la 3ème valeur.
 
-### → Installer l'App sur ton repo
+#### → Installer l'App sur ton repo
 
 Menu gauche → Install App → clique Install sur ton compte @victor54454 → choisis Only select repositories → sélectionne POC-VAULT-ARGOCD → valide.
 
-### → Récupérer l'Installation ID
+#### → Récupérer l'Installation ID
 
 Après l'install, regarde l'URL du navigateur :
 
@@ -101,13 +114,13 @@ https://github.com/settings/installations/XXXXXXXX
 
 Le nombre à la fin = ton Installation ID (2ème valeur).
 
-### → Connecter le repo dans ArgoCD
+#### → Connecter le repo dans ArgoCD
 
 UI ArgoCD → Settings → Repositories → CONNECT REPO → méthode GITHUB APP, en renseignant les 3 valeurs (App ID, Installation ID, private key .pem).
 
 **Attention au champ Project** : mettre `default`, pas `poc`. Le repo est scopé au projet ; si l'Application est dans `default` et le repo dans `poc`, elle ne le verra pas.
 
-## Le repo POC-VAULT-ARGOCD
+### Le repo POC-VAULT-ARGOCD
 
 Structure :
 
@@ -124,7 +137,7 @@ Il n'y a **aucun** `templates/secret.yaml`. C'est VSO qui crée les `Secret` dan
 
 Un fichier par composant, chacun avec son bloc dans `values.yaml`, même structure.
 
-### `Chart.yaml`
+#### `Chart.yaml`
 
 ```yaml
 apiVersion: v2
@@ -135,7 +148,7 @@ version: 0.1.0
 appVersion: "1.0"
 ```
 
-### `values.yaml`
+#### `values.yaml`
 
 ```yaml
 nginx:
@@ -162,7 +175,7 @@ postgres:
     targetPort: 5432
 ```
 
-### `templates/nginx.yaml`
+#### `templates/nginx.yaml`
 
 ```yaml
 apiVersion: apps/v1
@@ -205,7 +218,7 @@ spec:
       {{- end }}
 ```
 
-### `templates/postgres.yaml`
+#### `templates/postgres.yaml`
 
 ```yaml
 apiVersion: apps/v1
@@ -257,11 +270,11 @@ git commit -m "Chart POC nginx + postgres, aucun secret"
 git push
 ```
 
-## Créer l'Application ArgoCD
+### Créer l'Application ArgoCD
 
 + NEW APP :
 
-### General
+#### General
 
 → Application Name : poc
 → Project Name : default
@@ -269,7 +282,7 @@ git push
 → Coche Prune Resources et Self Heal
 → Coche Auto-Create Namespace
 
-### Source
+#### Source
 
 → Repository URL : sélectionne https://github.com/victor54454/POC-VAULT-ARGOCD dans la liste déroulante
 → Revision : main
@@ -278,12 +291,12 @@ git push
 
 Laisser VALUES FILES et VALUES vides. Les PARAMETERS affichés sont les valeurs par défaut lues dans `values.yaml` — on ne les surcharge pas.
 
-### Destination
+#### Destination
 
 → Cluster URL : https://kubernetes.default.svc
 → Namespace : poc
 
-### → État attendu à ce stade
+#### → État attendu à ce stade
 
 ```bash
 kubectl get pods -n poc
@@ -299,7 +312,7 @@ kubectl describe pod -n poc | grep -A2 Events
 
 C'est exactement le Cas B du Test 8 : le pod ne démarre pas tant que le Secret n'existe pas. Ça se résoudra tout seul dès que VSO aura créé les Secrets — sans re-sync ArgoCD. C'est la démonstration du découplage.
 
-## Installation de Vault
+### Installation de Vault
 
 Récupérer la dernière version :
 
@@ -317,7 +330,7 @@ rm vault.zip
 vault version
 ```
 
-### → Lancer Vault en mode dev
+#### → Lancer Vault en mode dev
 
 Le mode dev démarre Vault unsealed, en mémoire, avec un root token fixe. **POC uniquement** : tout est perdu au redémarrage — y compris un simple reboot de la VM.
 
@@ -339,7 +352,7 @@ L'UI Vault est accessible sur `http://192.168.10.179:8200` (token : `root`).
 
 `VAULT_TOKEN` est le token d'authentification du client CLI, pas un mot de passe modifiable à la volée : il doit valoir exactement ce qui a été passé à `-dev-root-token-id`.
 
-## Pousser les secrets dans Vault
+### Pousser les secrets dans Vault
 
 ```bash
 vault secrets enable -path=kv kv-v2
@@ -371,7 +384,7 @@ Le `DATABASE_URL` de nginx pointe sur `poc-postgres` — le nom du Service rendu
 
 **Note** : `vault kv list kv/poc/preprod/nginx` renvoie `No value found` — c'est normal, `nginx` est un secret, pas un dossier.
 
-## Auth Kubernetes
+### Auth Kubernetes
 
 Vault tourne sur la VM, **hors du cluster**. Il faut donc lui donner l'URL de l'API Kubernetes, le CA, et un token lui permettant de valider les JWT des pods.
 
@@ -392,7 +405,7 @@ echo "$K8S_HOST"
 K8S_HOST="https://192.168.10.179:6443"
 ```
 
-### → Le token reviewer (obligatoire quand Vault est hors du cluster)
+#### → Le token reviewer (obligatoire quand Vault est hors du cluster)
 
 Quand un pod se présente, Vault doit vérifier son token auprès de l'API Kubernetes (`TokenReview`). Pour cela il lui faut lui-même une identité dans le cluster.
 
@@ -413,7 +426,7 @@ REVIEWER_JWT=$(kubectl create token vault-reviewer -n vault-auth --duration=8760
 
 Le ClusterRole `system:auth-delegator` donne exactement une chose : le droit d'appeler `TokenReview` et `SubjectAccessReview`. Aucun accès aux secrets, aux pods, à rien d'autre.
 
-### → Configurer l'auth method
+#### → Configurer l'auth method
 
 ```bash
 vault write auth/kubernetes/config \
@@ -433,7 +446,7 @@ vault read auth/kubernetes/config | grep -E 'token_reviewer_jwt_set|disable_loca
 
 Si `token_reviewer_jwt_set` est à `false`, tous les logins échoueront en 403.
 
-### → La policy
+#### → La policy
 
 Lecture seule, une seule règle avec wildcard pour couvrir les deux composants.
 
@@ -452,7 +465,7 @@ Deux points :
 
 C'est le wildcard qui rend le pattern réplicable : une policy par app/env, quel que soit le nombre de composants dedans.
 
-### → Le role
+#### → Le role
 
 Il lie un ServiceAccount Kubernetes à la policy.
 
@@ -466,7 +479,7 @@ vault write auth/kubernetes/role/poc \
 
 Seul le SA `vso-poc` du namespace `poc` pourra s'authentifier avec ce role. Le warning sur l'`audience` est bénin (durcissement optionnel du JWT).
 
-## Installation du Vault Secrets Operator
+### Installation du Vault Secrets Operator
 
 VSO est un chart Helm officiel HashiCorp. Pas d'image custom, pas de plugin, pas de patch du repo-server.
 
@@ -489,7 +502,7 @@ kubectl get pods -n vault-secrets-operator
 kubectl get crd | grep secrets.hashicorp.com
 ```
 
-## Les CRs dans le namespace poc
+### Les CRs dans le namespace poc
 
 Un `VaultStaticSecret` par Secret à produire. Le ServiceAccount et le `VaultAuth` sont partagés.
 
@@ -576,7 +589,7 @@ kubectl get pods -n poc -w
 
 Chaque Secret contient une clé de plus que ce qui a été poussé : `_raw`, le JSON complet renvoyé par Vault, ajouté par VSO. Sans impact sur `envFrom` — mais à filtrer en production.
 
-### → Diagnostic
+#### → Diagnostic
 
 Deux sources à consulter — ce sont **les Events du CR qui portent les erreurs métier** (auth, lecture), pas les logs du controller :
 
@@ -592,9 +605,9 @@ kubectl delete pod -n vault-secrets-operator -l app.kubernetes.io/name=vault-sec
 kubectl get secret -n poc -w
 ```
 
-## Validation du POC
+### Validation du POC
 
-### → Test 1 — les secrets sont provisionnés dans les pods
+#### → Test 1 — les secrets sont provisionnés dans les pods
 
 ```bash
 kubectl exec -n poc deploy/poc-nginx -- env | grep APP_SECRET
@@ -609,7 +622,7 @@ Les secrets ne sont jamais passés par Git ni par Helm.
 
 **Note sur `_raw`** : VSO ajoute cette clé au `Secret`, contenant le JSON complet renvoyé par Vault. Avec `envFrom`, elle se retrouve donc en variable d'environnement du process — tous les secrets d'un coup, dans une seule variable. Sans gravité ici, mais à filtrer en production via une `SecretTransformation` avec `excludes: ["_raw"]`.
 
-### → Test 2 — Postgres applique réellement le mot de passe de Vault
+#### → Test 2 — Postgres applique réellement le mot de passe de Vault
 
 Le test qui prouve que la chaîne est réelle et pas seulement cosmétique.
 
@@ -665,7 +678,7 @@ kubectl exec -n poc deploy/poc-nginx -- sh -c 'echo $DATABASE_URL'
 # postgres://pocuser:Vault-P0stgres-2026@poc-postgres:5432/pocdb
 ```
 
-### → Test 3 — l'API ArgoCD ne renvoie aucun secret
+#### → Test 3 — l'API ArgoCD ne renvoie aucun secret
 
 On récupère un token et on interroge l'API :
 
@@ -701,7 +714,7 @@ L'API répond, les manifests sont là, et aucun secret dedans. Il n'y a plus de 
 
 Le `-o /dev/null` dans les CI devient une simple défense en profondeur, plus une nécessité.
 
-### → Test 4 — un update Helm ne change rien aux secrets
+#### → Test 4 — un update Helm ne change rien aux secrets
 
 Reproduit le comportement de la CI (patch du tag d'image via l'API).
 
@@ -750,7 +763,7 @@ curl -k -s -o /dev/null -w "\nHTTP_CODE=%{http_code}\n" \
   -H "Content-Type: application/json" -d "$REQUEST"
 ```
 
-### → Test 5 — rotation depuis Vault
+#### → Test 5 — rotation depuis Vault
 
 ```bash
 vault kv put kv/poc/preprod/nginx \
@@ -777,7 +790,7 @@ kubectl describe vaultstaticsecret poc-nginx -n poc | grep RolloutRestart
 
 C'est exactement le problème que les **dynamic secrets** Vault résolvent : Vault crée et révoque les comptes Postgres lui-même, avec un TTL court. Hors périmètre de ce POC, mais c'est la suite logique — et le vrai argument pour Vault au-delà du simple stockage.
 
-### → Test 6 — révocation
+#### → Test 6 — révocation
 
 ```bash
 vault policy delete poc
@@ -838,7 +851,7 @@ vault kv put kv/poc/preprod/nginx \
   DOCKERHUB_TOKEN="dckr_pat_exemple_token_12345"
 ```
 
-### → Test 7 — audit
+#### → Test 7 — audit
 
 ```bash
 vault audit enable file file_path=/tmp/vault-audit.log
@@ -867,7 +880,7 @@ jq -c 'select(.request.path | startswith("kv/data/poc/preprod")) | select(.type 
   | {time, sa: .auth.metadata.service_account_name, path: .request.path}' /tmp/vault-audit.log
 ```
 
-### → Test 8 — Vault indisponible
+#### → Test 8 — Vault indisponible
 
 Le point dur du pattern. À mesurer, pas à ignorer.
 
@@ -917,7 +930,7 @@ vault server -dev -dev-listen-address=0.0.0.0:8200 -dev-root-token-id=root
 
 Le SA `vault-reviewer`, son ClusterRoleBinding et les CRs VSO survivent (ils sont dans etcd). En revanche `/tmp/k8s-ca.crt` disparaît à chaque reboot — le régénérer.
 
-## Bilan de la comparaison
+### Bilan de la comparaison
 
 | | SOPS + Age | Vault + VSO |
 |---|---|---|
@@ -939,7 +952,7 @@ L'alternative **Bank-Vaults** (mutating webhook, injection en mémoire, zéro se
 
 Les deux cohabitent (même Vault, même auth K8s, mêmes policies) : si un audit impose un jour zéro-secret-dans-etcd, on ajoute le webhook sur les apps concernées. Le coût de changement d'avis reste faible.
 
-## Le dispatch multi-app en pratique
+### Le dispatch multi-app en pratique
 
 Ce que le POC démontre à deux composants se réplique tel quel :
 
@@ -970,7 +983,7 @@ envFrom:
 Ce qui se duplique par **namespace** : le ServiceAccount, le `VaultAuth`, un role Vault.
 Ce qui se duplique par **Secret** : un `VaultStaticSecret`.
 
-## Passage en production (hors POC)
+### Passage en production (hors POC)
 
 Le mode dev ne se déploie pas. L'écart à combler :
 
@@ -991,7 +1004,7 @@ Le mode dev ne se déploie pas. L'écart à combler :
 
 **Licence** : Vault est en BUSL 1.1 depuis août 2023. Usage interne = OK. Pour un usage type revente de Vault managé à des clients, basculer sur OpenBao (fork Linux Foundation, MPL 2.0, API-compatible, VSO fonctionne dessus).
 
-## Liens utiles
+### Liens utiles
 
 ```
 https://developer.hashicorp.com/vault/docs/platform/k8s/vso
