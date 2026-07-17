@@ -5,6 +5,7 @@ Solution testée : Vault self-hosted + Vault Secrets Operator (VSO),
 auth Kubernetes, injection au déploiement.
 
 ## Architecture
+```
                          ┌─────────────┐
                          │   Git repo  │  Chart Helm
                          │  (0 secret) │  nginx + postgres
@@ -35,7 +36,7 @@ auth Kubernetes, injection au déploiement.
                             │  KV v2 engine    │
                             │  policy + role   │
                             └──────────────────┘
-
+```
 ## Résultat
 Chart Helm nginx + postgres déployé via ArgoCD, secrets récupérés
 depuis le moteur KV v2 sans jamais transiter par Git.
