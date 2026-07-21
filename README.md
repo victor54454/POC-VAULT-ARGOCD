@@ -13,25 +13,25 @@ oriente vers la bonne selon ce que tu cherches.
 
 | Tu veux… | Doc |
 |---|---|
-| Comprendre le **POC de base** (pourquoi Vault plutôt que SOPS, le principe VSO) | [Mode DEV + ArgoCD](./VAULT_MODE_DEV%26ARGOCD.md) |
-| Monter **de zéro** : cluster K8s, ArgoCD, l'app de test, VSO, Vault `-dev` | [Mode DEV + ArgoCD](./VAULT_MODE_DEV%26ARGOCD.md) |
-| Les **8 tests** de validation (rotation, révocation, audit, Vault down…) | [Mode DEV + ArgoCD](./VAULT_MODE_DEV%26ARGOCD.md) |
-| Passer **Vault en prod** : binaire systemd, TLS, Raft, unseal Shamir | [Mode PROD + Keycloak + Teleport](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT%26ARGOCD.md) |
-| **Rebrancher le VSO** en HTTPS sur le nouveau Vault | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT%26ARGOCD.md) (§7) |
-| **Gérer les clés** : rekey, rotate, révocation du root token | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT%26ARGOCD.md) (§9) |
-| Ajouter le **SSO** : Keycloak (IdP OIDC) + auth OIDC Vault | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT%26ARGOCD.md) (§10-11) |
-| Mettre **Teleport** devant Vault (accès + MFA + audit) | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT%26ARGOCD.md) (§12) |
-| **Verrouiller** l'accès direct (firewall) | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT%26ARGOCD.md) (§13) |
+| Comprendre le **POC de base** (pourquoi Vault plutôt que SOPS, le principe VSO) | [Mode DEV + ArgoCD](./VAULT_MODE_DEV_ARGOCD.md) |
+| Monter **de zéro** : cluster K8s, ArgoCD, l'app de test, VSO, Vault `-dev` | [Mode DEV + ArgoCD](./VAULT_MODE_DEV_ARGOCD.md) |
+| Les **8 tests** de validation (rotation, révocation, audit, Vault down…) | [Mode DEV + ArgoCD](./VAULT_MODE_DEV_ARGOCD.md) |
+| Passer **Vault en prod** : binaire systemd, TLS, Raft, unseal Shamir | [Mode PROD + Keycloak + Teleport](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) |
+| **Rebrancher le VSO** en HTTPS sur le nouveau Vault | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) (§7) |
+| **Gérer les clés** : rekey, rotate, révocation du root token | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) (§9) |
+| Ajouter le **SSO** : Keycloak (IdP OIDC) + auth OIDC Vault | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) (§10-11) |
+| Mettre **Teleport** devant Vault (accès + MFA + audit) | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) (§12) |
+| **Verrouiller** l'accès direct (firewall) | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) (§13) |
 
 ## Ordre de lecture
 
 Les deux docs se suivent : la seconde **suppose** que le POC de base tourne déjà.
 
-1. **[VAULT_MODE_DEV&ARGOCD](./VAULT_MODE_DEV%26ARGOCD.md)** — les fondations :
+1. **[VAULT_MODE_DEV&ARGOCD](./VAULT_MODE_DEV_ARGOCD.md)** — les fondations :
    cluster, ArgoCD, chart de test (nginx + postgres), VSO, Vault `-dev`, et les
    tests qui prouvent que les secrets ne transitent jamais par Git. À faire
    **en premier**.
-2. **[VAULT_MODE_PROD_KEYCLOAK_TELEPORT&ARGOCD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT%26ARGOCD.md)**
+2. **[VAULT_MODE_PROD_KEYCLOAK_TELEPORT&ARGOCD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md)**
    — le durcissement : on remplace le Vault `-dev` par une installation prod, puis
    on ajoute SSO (Keycloak), proxy d'accès (Teleport) et firewall. Commence par
    son **§0 « Point de départ »** qui liste ce qui doit déjà exister.
