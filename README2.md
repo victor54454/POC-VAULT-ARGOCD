@@ -15,6 +15,7 @@ rebranchement du Vault Secrets Operator (VSO) existant sur ce nouveau Vault.
 
 - [Ce qui change par rapport au mode dev](#ce-qui-change-par-rapport-au-mode-dev)
 - [Contexte](#contexte)
+- **0.** [Point de départ (ce qui doit déjà exister)](#0-point-de-départ-ce-qui-doit-déjà-exister)
 - **Prérequis** — [nettoyer l'ancien binaire du POC](#prérequis--nettoyer-lancien-binaire-du-poc)
 - **1.** [Installer Vault via le dépôt APT (version épinglée)](#1-installer-vault-via-le-dépôt-apt-version-épinglée)
 - **2.** [Certificat TLS (CA interne + certif serveur)](#2-certificat-tls-ca-interne--certif-serveur)
@@ -66,6 +67,35 @@ donner la nouvelle adresse **et** le CA pour valider le certificat.
 > comportement stable, identique au POC). À noter : un *breaking change* récent
 > pose la capability `cap_ipc_lock` au build — sans impact en binaire systemd,
 > à surveiller uniquement pour un futur Vault-in-K8s.
+
+---
+
+## 0. Point de départ (ce qui doit déjà exister)
+
+Cette doc **ne part pas de zéro absolu** : elle remplace un Vault `-dev` par un
+Vault prod, puis ajoute Keycloak, Teleport et le firewall. Elle suppose que le
+**POC ArgoCD + Vault de base tourne déjà**. Avant de commencer, tu dois avoir :
+
+- un **cluster Kubernetes** fonctionnel (ici mono-nœud `orktk`) ;
+- **ArgoCD** installé, avec l'**Application POC** (chart nginx + postgres) déployée ;
+- le **Vault Secrets Operator (VSO)** installé (chart `hashicorp/vault-secrets-operator`) ;
+- les **CRs VSO** appliqués (`vso-poc.yaml` : ServiceAccount `vso-poc`, `VaultAuth`,
+  `VaultStaticSecret` pour nginx et postgres) ;
+- le **SA `vault-reviewer`** dans le namespace `vault-auth` + son
+  ClusterRoleBinding `system:auth-delegator` (le token reviewer, pour l'auth
+  kubernetes de Vault hors cluster).
+
+> **Si tu pars d'une machine vierge**, ces éléments sont montés dans le **README
+> du POC ArgoCD + Vault** (l'autre doc). Fais-le d'abord jusqu'à avoir un Vault
+> `-dev` + VSO fonctionnels, puis reviens ici pour passer en prod. Les sections
+> qui réutilisent l'existant sont : §6.2 (SA `vault-reviewer`), §7 (VSO à
+> rebrancher).
+
+**Ordre des grandes étapes** (important — l'IdP avant le proxy) :
+Vault prod (§1-8) → gestion des clés (§9) → **Keycloak IdP (§10)** →
+**auth OIDC Vault (§11)** → **Teleport devant (§12)** → **firewall (§13)**.
+Keycloak doit exister **avant** de configurer l'OIDC de Vault, et l'OIDC doit
+marcher **avant** d'ajouter Teleport (débugger les deux en même temps = pénible).
 
 ---
 
@@ -641,6 +671,11 @@ Objectif : accès humain nominatif à Vault **sans compte ni token Vault**. Vaul
 délègue l'authentification à Keycloak (IdP OIDC). Un seul annuaire central, MFA
 possible, révocation immédiate en désactivant le compte Keycloak.
 
+> **Ordre.** Keycloak (§10) et l'auth OIDC Vault (§11) se font **avant** Teleport
+> (§12) : l'IdP doit exister et le SSO doit fonctionner en accès direct avant
+> d'ajouter le proxy par-dessus. Le firewall (§13) vient en dernier, une fois les
+> deux chemins (direct + Teleport) validés.
+
 ### 10.1 — Déploiement (mode prod : PostgreSQL + `start`)
 
 Keycloak est une app Java **stateless** : tout l'état (realms, users, clients)
@@ -795,9 +830,23 @@ moment).
 
 Nécessite un token admin (session `generate-root`, §9.3).
 
+**Vérifier d'abord que Vault peut joindre le realm Keycloak** — l'OIDC échoue en
+silence si l'URL de découverte n'est pas atteignable depuis la VM Vault :
+
+```bash
+curl -s http://192.168.10.179:30808/realms/infra/.well-known/openid-configuration | head -c 200
+# → doit renvoyer du JSON (issuer, authorization_endpoint, ...)
+```
+
+Si ça ne répond pas : Keycloak n'est pas up, ou le realm n'est pas `infra`, ou
+un firewall bloque le `30808`.
+
 ```bash
 export VAULT_ADDR="https://192.168.10.179:8200"
 export VAULT_CACERT="$HOME/vault-ca.crt"
+
+# Nettoyage : retirer le reliquat auth/jwt (fausse piste Teleport-JWT), s'il existe
+vault auth disable jwt 2>/dev/null || true
 
 vault auth enable oidc
 
