@@ -27,11 +27,11 @@ oriente vers la bonne selon ce que tu cherches.
 
 Les deux docs se suivent : la seconde **suppose** que le POC de base tourne déjà.
 
-1. **[VAULT_MODE_DEV&ARGOCD](./VAULT_MODE_DEV_ARGOCD.md)** — les fondations :
+1. **[VAULT_MODE_DEV_ARGOCD](./VAULT_MODE_DEV_ARGOCD.md)** — les fondations :
    cluster, ArgoCD, chart de test (nginx + postgres), VSO, Vault `-dev`, et les
    tests qui prouvent que les secrets ne transitent jamais par Git. À faire
    **en premier**.
-2. **[VAULT_MODE_PROD_KEYCLOAK_TELEPORT&ARGOCD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md)**
+2. **[VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md)**
    — le durcissement : on remplace le Vault `-dev` par une installation prod, puis
    on ajoute SSO (Keycloak), proxy d'accès (Teleport) et firewall. Commence par
    son **§0 « Point de départ »** qui liste ce qui doit déjà exister.
