@@ -6,7 +6,7 @@ Puis passage en **production** (systemd, TLS, Raft, Shamir) avec accès humain
 **SSO nominatif** (Keycloak OIDC) derrière un **proxy d'accès** (Teleport) et
 **firewall**.
 
-Ce dépôt contient **deux documentations**. Ce fichier est le point d'entrée : il
+Ce dépôt contient **trois documentations**. Ce fichier est le point d'entrée : il
 oriente vers la bonne selon ce que tu cherches.
 
 ## Quelle doc lire ?
@@ -22,10 +22,12 @@ oriente vers la bonne selon ce que tu cherches.
 | Ajouter le **SSO** : Keycloak (IdP OIDC) + auth OIDC Vault | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) (§10-11) |
 | Mettre **Teleport** devant Vault (accès + MFA + audit) | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) (§12) |
 | **Verrouiller** l'accès direct (firewall) | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) (§13) |
+| Créer un **compte local userpass + MFA TOTP** (admin ou secours) | [Userpass + MFA](./VAULT_USERPASS_MFA.md) |
 
 ## Ordre de lecture
 
-Les deux docs se suivent : la seconde **suppose** que le POC de base tourne déjà.
+Les deux docs principales se suivent : la seconde **suppose** que le POC de base
+tourne déjà. La doc userpass/MFA est **indépendante** (à consulter au besoin).
 
 1. **[VAULT_MODE_DEV_ARGOCD](./VAULT_MODE_DEV_ARGOCD.md)** — les fondations :
    cluster, ArgoCD, chart de test (nginx + postgres), VSO, Vault `-dev`, et les
@@ -35,6 +37,10 @@ Les deux docs se suivent : la seconde **suppose** que le POC de base tourne déj
    — le durcissement : on remplace le Vault `-dev` par une installation prod, puis
    on ajoute SSO (Keycloak), proxy d'accès (Teleport) et firewall. Commence par
    son **§0 « Point de départ »** qui liste ce qui doit déjà exister.
+3. **[VAULT_USERPASS_MFA](./VAULT_USERPASS_MFA.md)** *(optionnel)* — créer un
+   compte **local à Vault** (login + mot de passe + MFA TOTP), avec policy sur
+   mesure. Alternative ou complément à l'OIDC : compte d'administration
+   indépendant de l'IdP, ou accès de secours.
 
 ## Architecture finale (cible de la doc PROD)
 
@@ -51,7 +57,8 @@ Admin de secours → generate-root + 3 unseal keys   ← si IdP / Teleport indis
 ## Stack
 
 HashiCorp Vault 1.21.x (LTS) · Vault Secrets Operator · ArgoCD · Kubernetes ·
-Keycloak 26.7 (IdP OIDC) · Teleport 17.x (App Access) · Calico · ufw
+Keycloak 26.7 (IdP OIDC) · Teleport 17.x (App Access) · Calico · ufw ·
+Login MFA TOTP (userpass)
 
 > **Licence Vault** : BUSL 1.1 (usage interne OK). Pour de la revente managée,
 > basculer sur **OpenBao** (fork Linux Foundation, MPL 2.0, API-compatible).
