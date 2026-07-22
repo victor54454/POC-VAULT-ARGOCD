@@ -6,7 +6,7 @@ Puis passage en **production** (systemd, TLS, Raft, Shamir) avec accès humain
 **SSO nominatif** (Keycloak OIDC) derrière un **proxy d'accès** (Teleport) et
 **firewall**.
 
-Ce dépôt contient **trois documentations**. Ce fichier est le point d'entrée : il
+Ce dépôt contient **quatre documentations**. Ce fichier est le point d'entrée : il
 oriente vers la bonne selon ce que tu cherches.
 
 ## Quelle doc lire ?
@@ -23,11 +23,13 @@ oriente vers la bonne selon ce que tu cherches.
 | Mettre **Teleport** devant Vault (accès + MFA + audit) | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) (§12) |
 | **Verrouiller** l'accès direct (firewall) | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) (§13) |
 | Créer un **compte local userpass + MFA TOTP** (admin ou secours) | [Userpass + MFA](./VAULT_USERPASS_MFA.md) |
+| **Écrire une policy Vault** (capabilities, data/metadata, moteur vs chemin, exemples) | [Mémo policies](./VAULT_POLICIES_MEMO.md) |
 
 ## Ordre de lecture
 
 Les deux docs principales se suivent : la seconde **suppose** que le POC de base
-tourne déjà. La doc userpass/MFA est **indépendante** (à consulter au besoin).
+tourne déjà. Les docs userpass/MFA et mémo policies sont **indépendantes**
+(à consulter au besoin).
 
 1. **[VAULT_MODE_DEV_ARGOCD](./VAULT_MODE_DEV_ARGOCD.md)** — les fondations :
    cluster, ArgoCD, chart de test (nginx + postgres), VSO, Vault `-dev`, et les
@@ -41,6 +43,10 @@ tourne déjà. La doc userpass/MFA est **indépendante** (à consulter au besoin
    compte **local à Vault** (login + mot de passe + MFA TOTP), avec policy sur
    mesure. Alternative ou complément à l'OIDC : compte d'administration
    indépendant de l'IdP, ou accès de secours.
+4. **[VAULT_POLICIES_MEMO](./VAULT_POLICIES_MEMO.md)** *(référence)* — fiche mémo
+   pour écrire des policies : structure path + capabilities, deny par défaut,
+   piège data/metadata (KV v2), moteur vs chemin, wildcards `*`/`+`, et des
+   exemples prêts à adapter (lecture seule, CI/CD, admin des secrets…).
 
 ## Architecture finale (cible de la doc PROD)
 
