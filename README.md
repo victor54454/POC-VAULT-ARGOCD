@@ -51,12 +51,12 @@ PROD côté restauration.
    pour écrire des policies : structure path + capabilities, deny par défaut,
    piège data/metadata (KV v2), moteur vs chemin, wildcards `*`/`+`, et des
    exemples prêts à adapter (lecture seule, CI/CD, admin des secrets…).
-5. **[VAULT_DR_BASCULE](./VAULT_DR_BASCULE.md)** *(le jour où ça casse)* —
+5. **[VAULT_DR_BASCULE](./SYSTEM_DE_BASCULE_ENTRE_DE_VAULT.md)** *(le jour où ça casse)* —
    reconstruire un Vault mono-nœud mort sur une machine neuve, à partir de son
    kit de sauvegarde. Complète le **§Backup de la doc PROD** côté restauration :
    snapshot Raft chiffré `age`, TLS/CA à part, unseal keys, rebranchement du VSO
    sur la nouvelle IP. Suppose que la doc PROD tourne déjà.
-6. **[VAULT_POLICIES_EXOS](./VAULT_POLICIES_EXOS.md)** *(entraînement)* — 14
+6. **[VAULT_POLICIES_EXOS](./exempleacl.md)** *(entraînement)* — 14
    exercices corrigés pour s'exercer à écrire des policies ACL (KV v2 :
    data/metadata, soft delete/destroy, `sys/mounts`, `sys/auth`, la policy
    `infra` qui s'auto-élève, une policy `dev`). Compagnon pratique du **mémo
