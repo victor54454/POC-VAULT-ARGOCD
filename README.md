@@ -6,7 +6,7 @@ Puis passage en **production** (systemd, TLS, Raft, Shamir) avec accès humain
 **SSO nominatif** (Keycloak OIDC) derrière un **proxy d'accès** (Teleport) et
 **firewall**.
 
-Ce dépôt contient **quatre documentations**. Ce fichier est le point d'entrée : il
+Ce dépôt contient **six documentations**. Ce fichier est le point d'entrée : il
 oriente vers la bonne selon ce que tu cherches.
 
 ## Quelle doc lire ?
@@ -22,14 +22,18 @@ oriente vers la bonne selon ce que tu cherches.
 | Ajouter le **SSO** : Keycloak (IdP OIDC) + auth OIDC Vault | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) (§10-11) |
 | Mettre **Teleport** devant Vault (accès + MFA + audit) | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) (§12) |
 | **Verrouiller** l'accès direct (firewall) | [Mode PROD](./VAULT_MODE_PROD_KEYCLOAK_TELEPORT_ARGOCD.md) (§13) |
+| **Reconstruire un Vault mort** vers une machine neuve (nouvelle IP + CA) à partir du kit de backup | [Bascule DR](./VAULT_DR_BASCULE.md) |
+| Constituer le **kit de sauvegarde** (snapshot age + TLS + config + unseal keys) | [Bascule DR](./VAULT_DR_BASCULE.md) |
 | Créer un **compte local userpass + MFA TOTP** (admin ou secours) | [Userpass + MFA](./VAULT_USERPASS_MFA.md) |
 | **Écrire une policy Vault** (capabilities, data/metadata, moteur vs chemin, exemples) | [Mémo policies](./VAULT_POLICIES_MEMO.md) |
+| **S'entraîner** à écrire des policies (14 exercices corrigés, KV v2) | [Exercices policies](./VAULT_POLICIES_EXOS.md) |
 
 ## Ordre de lecture
 
 Les deux docs principales se suivent : la seconde **suppose** que le POC de base
-tourne déjà. Les docs userpass/MFA et mémo policies sont **indépendantes**
-(à consulter au besoin).
+tourne déjà. Les docs userpass/MFA, mémo policies et exercices sont
+**indépendantes** (à consulter au besoin) ; la bascule DR **prolonge** la doc
+PROD côté restauration.
 
 1. **[VAULT_MODE_DEV_ARGOCD](./VAULT_MODE_DEV_ARGOCD.md)** — les fondations :
    cluster, ArgoCD, chart de test (nginx + postgres), VSO, Vault `-dev`, et les
@@ -47,6 +51,16 @@ tourne déjà. Les docs userpass/MFA et mémo policies sont **indépendantes**
    pour écrire des policies : structure path + capabilities, deny par défaut,
    piège data/metadata (KV v2), moteur vs chemin, wildcards `*`/`+`, et des
    exemples prêts à adapter (lecture seule, CI/CD, admin des secrets…).
+5. **[VAULT_DR_BASCULE](./VAULT_DR_BASCULE.md)** *(le jour où ça casse)* —
+   reconstruire un Vault mono-nœud mort sur une machine neuve, à partir de son
+   kit de sauvegarde. Complète le **§Backup de la doc PROD** côté restauration :
+   snapshot Raft chiffré `age`, TLS/CA à part, unseal keys, rebranchement du VSO
+   sur la nouvelle IP. Suppose que la doc PROD tourne déjà.
+6. **[VAULT_POLICIES_EXOS](./VAULT_POLICIES_EXOS.md)** *(entraînement)* — 14
+   exercices corrigés pour s'exercer à écrire des policies ACL (KV v2 :
+   data/metadata, soft delete/destroy, `sys/mounts`, `sys/auth`, la policy
+   `infra` qui s'auto-élève, une policy `dev`). Compagnon pratique du **mémo
+   policies**.
 
 ## Architecture finale (cible de la doc PROD)
 
@@ -64,7 +78,7 @@ Admin de secours → generate-root + 3 unseal keys   ← si IdP / Teleport indis
 
 HashiCorp Vault 1.21.x (LTS) · Vault Secrets Operator · ArgoCD · Kubernetes ·
 Keycloak 26.7 (IdP OIDC) · Teleport 17.x (App Access) · Calico · ufw ·
-Login MFA TOTP (userpass)
+Login MFA TOTP (userpass) · snapshot Raft chiffré `age` (backup/DR)
 
 > **Licence Vault** : BUSL 1.1 (usage interne OK). Pour de la revente managée,
 > basculer sur **OpenBao** (fork Linux Foundation, MPL 2.0, API-compatible).
