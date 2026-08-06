@@ -28,7 +28,7 @@ AGE_RECIPIENT="age153rt7sr3c3ggqalfgztcntffs6e2q57q8t0txmlzzuru4eckw5lq30dqnh"
 
 # --- Config S3 OVH (s5cmd, même profil que les autres backups RepairSoft) ---
 MAX_BACKUP=7                # versions conservées PAR FAMILLE sur S3
-S3="s3://database-repairsoft/"
+S3="s3://repairsoft-backup-test-xsjbxqsaz047d/"
 ENDPOINT_URL="https://s3.rbx.io.cloud.ovh.net"
 S3_PROFILE="database-repairsoft"
 SNAP_FOLDER="vault/snapshots/"
