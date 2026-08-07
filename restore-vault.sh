@@ -38,6 +38,7 @@ AGE_KEY="/home/orktk/vault-backup-key.txt"   # clé privée age (déchiffrement)
 S3="s3://repairsoft-backup-test-xsjbxqsaz047d/"
 ENDPOINT_URL="https://s3.rbx.io.cloud.ovh.net"
 S3_PROFILE="database-repairsoft"
+AWS_REGION="rbx"
 SNAP_FOLDER="vault/snapshots/"
 KIT_FOLDER="vault/kits/"
 CA_FOLDER="vault/ca/"          # CA du nouveau Vault, déposée en phase2 pour la phase3
@@ -99,12 +100,98 @@ fetch_latest() {
 }
 
 # =============================================================================
+# PHASE 0 — INIT : prépare une VM vierge (dépendances + credentials S3)
+# =============================================================================
+phase0() {
+  log "PHASE 0 — préparation de la machine (dépendances + accès S3)"
+
+  # --- Dépendances système ---
+  log "Installation des dépendances (age, jq, openssl, tar, wget, curl)"
+  sudo apt-get update
+  sudo apt-get install -y age jq openssl tar wget curl gpg lsb-release
+
+  # --- s5cmd (pas dans apt : paquet .deb GitHub) ---
+  if ! command -v s5cmd >/dev/null 2>&1; then
+    log "Installation de s5cmd (2.3.0)"
+    local T; T="$(mktemp -d)"
+    wget -qO "${T}/s5cmd.deb"       https://github.com/peak/s5cmd/releases/download/v2.3.0/s5cmd_2.3.0_linux_amd64.deb       || die "Téléchargement de s5cmd échoué"
+    sudo dpkg -i "${T}/s5cmd.deb" || sudo apt-get install -f -y
+    rm -rf "${T}"
+  fi
+  command -v s5cmd >/dev/null 2>&1 || die "s5cmd toujours absent après install"
+  ok "Outils installés : age, jq, openssl, tar, s5cmd"
+
+  # --- Credentials S3 (interactif) ---
+  log "Configuration des accès S3 (profil '${S3_PROFILE}')"
+  local AK SK REG
+  read -rp "  Access Key S3 : " AK
+  read -rsp "  Secret Key S3 : " SK; echo >&2
+  read -rp "  Région S3 [${AWS_REGION}] : " REG
+  REG="${REG:-${AWS_REGION}}"
+  [[ -n "${AK}" && -n "${SK}" ]] || die "Access key / Secret key vides."
+
+  mkdir -p "${HOME}/.aws"; chmod 700 "${HOME}/.aws"
+  cat > "${HOME}/.aws/credentials" <<EOF
+[${S3_PROFILE}]
+aws_access_key_id = ${AK}
+aws_secret_access_key = ${SK}
+EOF
+  chmod 600 "${HOME}/.aws/credentials"
+
+  cat > "${HOME}/.aws/config" <<EOF
+[profile ${S3_PROFILE}]
+region = ${REG}
+EOF
+  chmod 600 "${HOME}/.aws/config"
+  unset SK
+  ok "Credentials écrits dans ~/.aws (profil ${S3_PROFILE}, région ${REG})"
+
+  # --- Test de connexion S3 ---
+  log "Test de connexion au bucket"
+  if s3 ls "${S3}${SNAP_FOLDER}" >&2; then
+    ok "Connexion S3 OK — les snapshots sont accessibles."
+  else
+    warn "Impossible de lister ${S3}${SNAP_FOLDER}."
+    warn "Vérifie les clés, la région (${REG}) et l'endpoint (${ENDPOINT_URL})."
+    die "Test S3 échoué."
+  fi
+
+  # --- Rappel clé age ---
+  if [[ -f "${AGE_KEY}" ]]; then
+    ok "Clé privée age présente : ${AGE_KEY}"
+  else
+    warn "Clé privée age ABSENTE : ${AGE_KEY}"
+    warn "Dépose-la à ce chemin AVANT phase1 (elle déchiffre les backups)."
+  fi
+
+  echo >&2
+  ok "PHASE 0 terminée — machine prête."
+  echo "  ➜ Prochaine étape : ./restore-vault.sh phase1" >&2
+}
+
+# =============================================================================
 # PHASE 1
 # =============================================================================
 phase1() {
-  log "PHASE 1 — reconstruction du Vault sur ${VAULT_ADDR}"
+  log "PHASE 1 — reconstruction du Vault"
 
-  command -v age   >/dev/null 2>&1 || die "'age' non installé"
+  # --- Saisie interactive de la cible ---
+  local IN_HOST IN_REGEN
+  read -rp "  IP ou nom du nouveau Vault : " IN_HOST
+  [[ -n "${IN_HOST}" ]] || die "IP/nom du Vault requis."
+  VAULT_HOST="${IN_HOST}"
+  VAULT_ADDR="https://${VAULT_HOST}:8200"
+  export VAULT_ADDR
+
+  read -rp "  Régénérer la CA ? (true si l'IP/nom change, false si identique à l'ancien Vault) [true/false] : " IN_REGEN
+  case "${IN_REGEN,,}" in
+    true|t|o|oui|y|yes)  REGEN_CA=true ;;
+    false|f|n|non|no)    REGEN_CA=false ;;
+    *) die "Réponse invalide : réponds true ou false." ;;
+  esac
+  log "Cible : ${VAULT_ADDR} — REGEN_CA=${REGEN_CA}"
+
+  command -v age   >/dev/null 2>&1 || die "'age' non installé (lance ./restore-vault.sh phase0)"
   command -v s5cmd >/dev/null 2>&1 || die "'s5cmd' non installé"
   command -v jq    >/dev/null 2>&1 || die "'jq' non installé"
   [[ -f "${AGE_KEY}" ]] || die "Clé privée age introuvable: ${AGE_KEY}"
@@ -360,11 +447,14 @@ phase3() {
   echo "  Test final : rotation d'un secret (doc Phase 5)." >&2
 }
 
-usage() {
+# Corps du guide (partagé par --help et le message d'erreur)
+help_body() {
+  echo -e "Ce script se lance en plusieurs temps. Tu dois préciser la phase :" >&2
   echo -e "" >&2
-  echo -e "\033[1;31mERREUR : argument manquant ou invalide.\033[0m" >&2
-  echo -e "" >&2
-  echo -e "Ce script se lance en TROIS temps. Tu dois préciser la phase à exécuter :" >&2
+  echo -e "  \033[1;36m$0 phase0\033[0m  (INIT, sur une VM vierge)" >&2
+  echo -e "      Installe les dépendances (age, jq, s5cmd, openssl) et configure" >&2
+  echo -e "      l'accès S3 (te demande Access Key + Secret Key en interactif)." >&2
+  echo -e "      -> À lancer EN PREMIER sur toute machine neuve." >&2
   echo -e "" >&2
   echo -e "  \033[1;36m$0 phase1\033[0m" >&2
   echo -e "      Reconstruit un Vault vierge sur la machine cible :" >&2
@@ -389,13 +479,32 @@ usage() {
   echo -e "      -> À lancer sur la MACHINE DU CLUSTER (celle qui a kubectl)." >&2
   echo -e "         C'est CETTE phase qui relie le cluster à Vault." >&2
   echo -e "" >&2
-  echo -e "Ordre : \033[1;36mphase1\033[0m (nouveau Vault) -> \033[1;36mphase2\033[0m (nouveau Vault)" >&2
+  echo -e "Ordre : \033[1;36mphase0\033[0m (init) -> \033[1;36mphase1\033[0m -> \033[1;36mphase2\033[0m (nouveau Vault)" >&2
   echo -e "        -> \033[1;36mphase3\033[0m (machine du cluster)." >&2
   echo -e "" >&2
+}
+
+# Aide explicite (./t.sh --help) : pas d'erreur, sortie 0.
+help_menu() {
+  echo -e "" >&2
+  echo -e "\033[1;36mrestore-vault.sh — restauration DR d'un Vault mono-nœud\033[0m" >&2
+  echo -e "" >&2
+  help_body
+  exit 0
+}
+
+# Argument manquant/invalide : bandeau d'erreur, sortie 1.
+usage() {
+  echo -e "" >&2
+  echo -e "\033[1;31mERREUR : argument manquant ou invalide.\033[0m" >&2
+  echo -e "" >&2
+  help_body
   exit 1
 }
 
 case "${1:-}" in
+  -h|--help|help) help_menu ;;
+  phase0) phase0 ;;
   phase1) phase1 ;;
   phase2) phase2 ;;
   phase3) phase3 ;;
