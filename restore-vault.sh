@@ -22,8 +22,10 @@ umask 077
 # =============================================================================
 
 # =========================== CONFIG (à adapter) ==============================
-VAULT_HOST="192.168.10.222"          # nouvelle IP/nom du Vault (ou l'ancienne si REGEN_CA=false)
-VAULT_ADDR="https://${VAULT_HOST}:8200"
+# VAULT_HOST est DEMANDÉ à l'exécution en phase1 (ne rien mettre ici : la
+# valeur serait de toute façon écrasée par la saisie interactive).
+VAULT_HOST=""
+VAULT_ADDR=""
 VAULT_VERSION="1.21.4-1"
 
 # --- Régénérer CA+config (true si IP change) OU réutiliser le kit (false) ---
@@ -38,7 +40,7 @@ AGE_KEY="/home/orktk/vault-backup-key.txt"   # clé privée age (déchiffrement)
 S3="s3://repairsoft-backup-test-xsjbxqsaz047d/"
 ENDPOINT_URL="https://s3.rbx.io.cloud.ovh.net"
 S3_PROFILE="database-repairsoft"
-AWS_REGION="rbx"
+AWS_REGION="rbx"                     # région OVH (rbx, gra, sbg...)
 SNAP_FOLDER="vault/snapshots/"
 KIT_FOLDER="vault/kits/"
 CA_FOLDER="vault/ca/"          # CA du nouveau Vault, déposée en phase2 pour la phase3
@@ -183,10 +185,10 @@ phase1() {
   VAULT_ADDR="https://${VAULT_HOST}:8200"
   export VAULT_ADDR
 
-  read -rp "  Régénérer la CA ? (true si l'IP/nom change, false si identique à l'ancien Vault) [true/false] : " IN_REGEN
+  read -rp "  Régénérer la CA ? (true si l'IP/nom change, false si identique) [true] : " IN_REGEN
   case "${IN_REGEN,,}" in
-    true|t|o|oui|y|yes)  REGEN_CA=true ;;
-    false|f|n|non|no)    REGEN_CA=false ;;
+    ""|true|t|o|oui|y|yes)  REGEN_CA=true ;;
+    false|f|n|non|no)       REGEN_CA=false ;;
     *) die "Réponse invalide : réponds true ou false." ;;
   esac
   log "Cible : ${VAULT_ADDR} — REGEN_CA=${REGEN_CA}"
