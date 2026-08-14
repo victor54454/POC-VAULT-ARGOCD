@@ -22,10 +22,8 @@ umask 077
 # =============================================================================
 
 # =========================== CONFIG (à adapter) ==============================
-# VAULT_HOST est DEMANDÉ à l'exécution en phase1 (ne rien mettre ici : la
-# valeur serait de toute façon écrasée par la saisie interactive).
-VAULT_HOST=""
-VAULT_ADDR=""
+VAULT_HOST="192.168.10.187"          # nouvelle IP/nom du Vault (ou l'ancienne si REGEN_CA=false)
+VAULT_ADDR="https://${VAULT_HOST}:8200"
 VAULT_VERSION="1.21.4-1"
 
 # --- Régénérer CA+config (true si IP change) OU réutiliser le kit (false) ---
@@ -40,7 +38,7 @@ AGE_KEY="/home/orktk/vault-backup-key.txt"   # clé privée age (déchiffrement)
 S3="s3://repairsoft-backup-test-xsjbxqsaz047d/"
 ENDPOINT_URL="https://s3.rbx.io.cloud.ovh.net"
 S3_PROFILE="database-repairsoft"
-AWS_REGION="rbx"                     # région OVH (rbx, gra, sbg...)
+AWS_REGION="rbx"
 SNAP_FOLDER="vault/snapshots/"
 KIT_FOLDER="vault/kits/"
 CA_FOLDER="vault/ca/"          # CA du nouveau Vault, déposée en phase2 pour la phase3
@@ -185,10 +183,10 @@ phase1() {
   VAULT_ADDR="https://${VAULT_HOST}:8200"
   export VAULT_ADDR
 
-  read -rp "  Régénérer la CA ? (true si l'IP/nom change, false si identique) [true] : " IN_REGEN
+  read -rp "  Régénérer la CA ? (true si l'IP/nom change, false si identique à l'ancien Vault) [true/false] : " IN_REGEN
   case "${IN_REGEN,,}" in
-    ""|true|t|o|oui|y|yes)  REGEN_CA=true ;;
-    false|f|n|non|no)       REGEN_CA=false ;;
+    true|t|o|oui|y|yes)  REGEN_CA=true ;;
+    false|f|n|non|no)    REGEN_CA=false ;;
     *) die "Réponse invalide : réponds true ou false." ;;
   esac
   log "Cible : ${VAULT_ADDR} — REGEN_CA=${REGEN_CA}"
@@ -205,9 +203,13 @@ phase1() {
   kit_enc=$(fetch_latest "${KIT_FOLDER}" "\.tar\.age$" "${BACKUP_DIR}")
 
   # --- Écrire le STATE_FILE PROPREMENT (printf seuls, aucun log ici) ---
+  # On y stocke AUSSI VAULT_HOST et VAULT_ADDR : la phase2 en hérite au lieu
+  # de retomber sur la valeur codée en dur en haut du script (bug .187).
   {
     printf 'SNAP_ENC=%s\n' "${snap_enc}"
     printf 'REGEN_CA=%s\n' "${REGEN_CA}"
+    printf 'VAULT_HOST=%s\n' "${VAULT_HOST}"
+    printf 'VAULT_ADDR=%s\n' "${VAULT_ADDR}"
   } > "${STATE_FILE}"
   chmod 600 "${STATE_FILE}"
 
@@ -342,6 +344,11 @@ phase2() {
   [[ -f "${STATE_FILE}" ]] || die "État phase1 introuvable. Lance phase1 d'abord."
   # shellcheck disable=SC1090
   source "${STATE_FILE}"
+  # Hérite de l'IP saisie en phase1 (sinon retombe sur la valeur codée en dur → bug .187)
+  [[ -n "${VAULT_ADDR:-}" ]] || die "VAULT_ADDR absent du STATE_FILE (phase1 trop ancienne ?). Relance phase1."
+  export VAULT_ADDR
+  export VAULT_CACERT="${CA_CLI}"
+  log "Cible héritée de phase1 : ${VAULT_ADDR}"
   [[ -n "${ROOT_TOKEN_JETABLE:-}" ]] || die "Root token jetable manquant."
   [[ -n "${SNAP_ENC:-}" && -f "${SNAP_ENC}" ]] || die "Snapshot .age introuvable (${SNAP_ENC:-vide})."
   [[ -f "${AGE_KEY}" ]] || die "Clé privée age introuvable: ${AGE_KEY}"
@@ -431,7 +438,7 @@ phase3() {
 
   # Repointer la VaultConnection (LE lien cluster → Vault)
   log "Repointage de la VaultConnection sur ${VAULT_ADDR}"
-  kubectl patch vaultconnection default -n "${VSO_NS}" --type merge     -p "{\"spec\":{\"address\":\"${VAULT_ADDR}\"}}"
+  kubectl patch vaultconnection default -n "${VSO_NS}" --type merge     -p "{\"spec\":{\"address\":\"${VAULT_ADDR}\",\"caCertSecretRef\":\"${VSO_CA_SECRET}\"}}"
 
   # Restart opérateur + recréation des CR (purge le client en cache, piège n°3)
   kubectl rollout restart deployment "${VSO_DEPLOY}" -n "${VSO_NS}"
